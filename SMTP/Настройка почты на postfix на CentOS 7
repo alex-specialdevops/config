@@ -1,0 +1,99 @@
+# Настройка postfix для отправки через localhost по 465 порту
+
+yum install -y postfix
+systemctl status postfix
+systemctl enable postfix 
+mkdir /etc/postfix/certs
+openssl req -new -x509 -days 3650 -nodes -out /etc/postfix/certs/cert.pem -keyout /etc/postfix/certs/key.pem
+
+# В конце файла /etc/postfix/main.cf добавляем
+```
+smtpd_use_tls = yes
+smtp_tls_security_level = may
+smtpd_tls_security_level = may
+smtpd_tls_loglevel = 1
+smtpd_tls_received_header = yes
+smtpd_tls_session_cache_timeout = 3600s
+smtp_tls_session_cache_database = btree:$data_directory/smtp_tls_session_cache
+smtpd_tls_key_file = /etc/postfix/certs/key.pem
+smtpd_tls_cert_file = /etc/postfix/certs/cert.pem
+tls_random_source = dev:/dev/urandom
+```
+
+# Также отредактируем файл /etc/postfix/master.cf находим строчку и раскомментируем ее:
+```
+smtps     inet  n       -       n       -       -       smtpd
+```
+# в этом же файле в конце добавьте:
+```
+submission inet n       -       n       -       -       smtpd
+  -o syslog_name=postfix/submission
+  -o smtpd_tls_wrappermode=no
+  -o smtpd_tls_security_level=encrypt
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_recipient_restrictions=permit_mynetworks,permit_sasl_authenticated,reject
+  -o smtpd_relay_restrictions=permit_mynetworks,permit_sasl_authenticated,defer_unauth_destination
+  -o milter_macro_daemon_name=ORIGINATING
+ ```
+
+# И перезагрузите postfix командой:
+systemctl restart postfix
+
+# И отредактируйте файл /etc/msmtprc
+```
+account default
+logfile /home/bitrix/msmtp_default.log
+host 127.0.0.1
+port 465
+from no-reply@merhatdostavka.kz
+tls off
+tls_starttls off
+tls_certcheck off 
+```
+
+# Настройка DKIM для postfix
+yum install -y opendkim
+systemctl enable opendkim
+mkdir /etc/postfix/dkim/
+opendkim-genkey -D /etc/postfix/dkim/ -d no-reply@merhatdostavka.kz -s ma
+chmod 600 /etc/postfix/dkim/ma.private  
+chown -R opendkim /etc/postfix/dkim/
+
+# Файл /etc/opendkim.conf необходимо привести к следующему виду:
+Syslog yes
+#Режим подписи и проверка подписей
+Mode sv
+#Указываем список ключей
+KeyTable /etc/postfix/dkim/keytable
+#Соответствие ключей и доменов
+SigningTable /etc/postfix/dkim/signingtable
+
+# В файле /etc/postfix/dkim/keytable необходимо указать информацию о приватном ключе:
+#имя_ключа домен:селектор:/путь/до/ключа
+ma.private merhatdostavka.kz:ma:/etc/postfix/dkim/ma.private
+
+# В файле /etc/postfix/dkim/signingtable указываются домены, которые необходимо подписывать:
+#домен имя_ключа
+merhatdostavka.kz ma.private
+#можно указать несколько доменов
+tehauto.kz to.private
+
+
+# Добавляем в /etc/postfix/main.cf:
+```
+milter_default_action = accept
+milter_protocol = 2
+smtpd_milters = inet:localhost:8891
+non_smtpd_milters = inet:localhost:8891
+```
+
+# Затем перезапускаем postfix и opendkim:
+
+systemctl restart postfix opendkim
+
+
+# Тестируем opendkim
+opendkim-testkey -d merhatdostavka.kz -s ma -vvv -k /etc/opendkim/keys/ma.private
+
+
+# Проверим DNS записи

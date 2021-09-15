@@ -1,0 +1,9 @@
+yum install -y exim && touch /etc/exim/ddnainips /etc/exim/ddnains /etc/exim/passwd /etc/exim/update.exim.conf && chown exim:exim /etc/exim/ddnainips /etc/exim/ddnains /etc/exim/passwd /etc/exim/update.exim.conf && mkdir /etc/exim/dkim && chown exim:exim /etc/exim/dkim && cp /etc/postfix/dkim/*.private /etc/exim/dkim/ && chown exim:exim /etc/exim/dkim/* && systemctl stop postfix && systemctl start exim && systemctl stop exim && rm -rf /etc/exim/exim.conf && vim /etc/exim/exim.conf
+yum install -y exim && touch /etc/exim/ddnainips /etc/exim/ddnains /etc/exim/passwd /etc/exim/update.exim.conf && chown exim:exim /etc/exim/ddnainips /etc/exim/ddnains /etc/exim/passwd /etc/exim/update.exim.conf && systemctl stop postfix && systemctl start exim && systemctl stop exim && rm -rf /etc/exim/exim.conf && vim /etc/exim/exim.conf
+[sendmail_path] = /usr/sbin/sendmail -t -i
+
+systemctl restart httpd
+alternatives --config mta
+openssl req -x509 -sha256 -days 9000 -nodes -newkey rsa:4096 -keyout /etc/exim/ssl/exim.key -out /etc/exim/ssl/exim.crt
+systemctl stop exim && systemctl disable exim && systemctl start postfix opendkim && systemctl enable postfix opendkim && alternatives --config mta
+systemctl stop exim && systemctl disable exim && systemctl start postfix && systemctl enable postfix && alternatives --config mta
